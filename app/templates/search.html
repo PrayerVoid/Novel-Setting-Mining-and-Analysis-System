@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>跨章节实体检索</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; background-color: #f5f7fa; }
+        .search-panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
+        .search-panel input, .search-panel button { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+        .results-panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        #timelineContainer { position: relative; padding: 20px 0; }
+        .timeline-item { display: flex; margin-bottom: 20px; }
+        .timeline-chapter { width: 100px; text-align: right; padding-right: 20px; font-weight: bold; color: #673ab7; }
+        .timeline-content { flex: 1; border-left: 3px solid #90caf9; padding-left: 20px; }
+        .change-card { background: #e3f2fd; border-radius: 4px; padding: 10px; margin-bottom: 10px; }
+        .change-key { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div style="margin-bottom: 20px;">
+        <a href="/" style="text-decoration: none; color: #666;">&larr; 返回首页</a>
+        <h1>跨章节实体检索</h1>
+    </div>
+
+    <div class="search-panel">
+        <input type="text" id="entityName" placeholder="输入实体名称...">
+        <input type="number" id="startChapter" placeholder="起始章节">
+        <input type="number" id="endChapter" placeholder="结束章节">
+        <button onclick="searchHistory()">检索</button>
+    </div>
+
+    <div class="results-panel">
+        <h3 id="resultsTitle">检索结果</h3>
+        <div id="timelineContainer">
+            <!-- 结果将动态生成在这里 -->
+        </div>
+    </div>
+
+    <script>
+        const novelId = new URLSearchParams(window.location.search).get('novel_id');
+
+        async function searchHistory() {
+            const entityName = document.getElementById('entityName').value;
+            const startChapter = document.getElementById('startChapter').value;
+            const endChapter = document.getElementById('endChapter').value;
+
+            if (!entityName || !startChapter || !endChapter) {
+                alert('请输入完整的检索条件');
+                return;
+            }
+
+            const res = await fetch(`/api/search/entity_history?novel_id=${novelId}&entity_name=${entityName}&start_chapter=${startChapter}&end_chapter=${endChapter}`);
+            const data = await res.json();
+
+            document.getElementById('resultsTitle').innerText = `"${entityName}" 的设定变更历史 (${startChapter}-${endChapter}章)`;
+            const container = document.getElementById('timelineContainer');
+            container.innerHTML = '';
+
+            if (data.error) {
+                container.innerHTML = `<p>错误: ${data.error}</p>`;
+                return;
+            }
+            if (data.length === 0) {
+                container.innerHTML = '<p>未找到相关变更记录。</p>';
+                return;
+            }
+
+            data.forEach(item => {
+                let changesHtml = '';
+                if (item.change_type === 'new_entity') {
+                    changesHtml = `<div class="change-card"><strong>实体创建</strong>: 类型为 ${item.details.type}</div>`;
+                } else if (item.change_type === 'property_change') {
+                    changesHtml = `<div class="change-card"><span class="change-key">${item.details.key}</span>: 变为 <strong>${item.details.value}</strong></div>`;
+                }
+
+                container.innerHTML += `
+                    <div class="timeline-item">
+                        <div class="timeline-chapter">第 ${item.chapter_number} 章</div>
+                        <div class="timeline-content">${changesHtml}</div>
+                    </div>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>

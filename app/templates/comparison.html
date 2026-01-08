@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>小说间比较 - 设定密度与图模式分析</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 40px 20px; 
+            background-color: #f5f7fa; 
+        }
+        
+        h1 { 
+            color: #2c3e50; 
+            text-align: center; 
+            margin-bottom: 40px; 
+        }
+        
+        .section { 
+            background: white; 
+            padding: 25px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05); 
+            margin-bottom: 30px; 
+        }
+        
+        .section h2 { 
+            color: #2c3e50; 
+            margin-bottom: 20px; 
+            border-bottom: 2px solid #2196f3; 
+            padding-bottom: 10px; 
+        }
+        
+        .chart-container { 
+            height: 400px; 
+            margin-bottom: 20px; 
+        }
+        
+        .controls { 
+            display: flex; 
+            gap: 15px; 
+            margin-bottom: 20px; 
+            align-items: center; 
+        }
+        
+        select, input { 
+            padding: 8px 12px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            font-size: 14px; 
+        }
+        
+        button { 
+            padding: 10px 20px; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 14px; 
+            transition: background 0.2s; 
+        }
+        
+        .btn-primary { 
+            background: #2196f3; 
+            color: white; 
+        }
+        
+        .btn-primary:hover { 
+            background: #1976d2; 
+        }
+        
+        .graph-container { 
+            height: 300px; 
+            border: 1px solid #eee; 
+            border-radius: 4px; 
+            margin-bottom: 15px; 
+        }
+        
+        .pattern-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); 
+            gap: 20px; 
+            margin-top: 20px; 
+        }
+        
+        .pattern-card { 
+            background: #f8f9fa; 
+            padding: 15px; 
+            border-radius: 6px; 
+            border-left: 4px solid #2196f3; 
+        }
+        
+        .pattern-info { 
+            margin-bottom: 10px; 
+        }
+        
+        .pattern-info h4 { 
+            margin: 0 0 5px 0; 
+            color: #333; 
+        }
+        
+        .pattern-info p { 
+            margin: 0; 
+            color: #666; 
+            font-size: 14px; 
+        }
+        
+        .loading { 
+            text-align: center; 
+            color: #666; 
+            padding: 20px; 
+        }
+        
+        .pattern-examples { 
+            margin-top: 15px; 
+            padding-top: 15px; 
+            border-top: 1px solid #eee; 
+        }
+        
+        .pattern-examples h5 { 
+            margin: 0 0 10px 0; 
+            color: #333; 
+            font-size: 14px; 
+        }
+        
+        .pattern-examples ul { 
+            margin: 0; 
+            padding-left: 20px; 
+        }
+        
+        .pattern-examples li { 
+            color: #666; 
+            font-size: 13px; 
+            margin-bottom: 5px; 
+            line-height: 1.4; 
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 小说间比较分析</h1>
+    
+    <div class="section">
+        <h2>🔍 设定密度比较</h2>
+        <div class="controls">
+            <select id="novelSelector">
+                <option value="">选择小说进行比较...</option>
+            </select>
+            <button class="btn-primary" onclick="addNovelToComparison()">添加小说</button>
+            <button class="btn-primary" onclick="generateDensityChart()">生成密度图表</button>
+            <button class="btn-primary" onclick="clearComparison()">清空比较</button>
+        </div>
+        
+        <div id="selectedNovels" style="margin-bottom: 20px;">
+            <p>已选择小说：<span id="novelListText">无</span></p>
+        </div>
+        
+        <div class="chart-container">
+            <canvas id="densityChart"></canvas>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>📈 图模式挖掘分析</h2>
+        <div class="controls">
+            <select id="patternNovelSelector">
+                <option value="">选择小说分析图模式...</option>
+            </select>
+            <select id="patternCount">
+                <option value="3">前3个模式</option>
+                <option value="5" selected>前5个模式</option>
+                <option value="10">前10个模式</option>
+            </select>
+            <button class="btn-primary" onclick="analyzePatterns()">分析图模式</button>
+        </div>
+        
+        <div id="patternResults">
+            <div class="loading">请选择小说并点击"分析图模式"</div>
+        </div>
+    </div>
+
+    <script>
+        let selectedNovels = [];
+        let densityChart = null;
+        
+        // 加载小说列表
+        async function loadNovels() {
+            const res = await fetch('/api/novels');
+            const novels = await res.json();
+            
+            const selector = document.getElementById('novelSelector');
+            const patternSelector = document.getElementById('patternNovelSelector');
+            
+            // 清空选项
+            selector.innerHTML = '<option value="">选择小说进行比较...</option>';
+            patternSelector.innerHTML = '<option value="">选择小说分析图模式...</option>';
+            
+            novels.forEach(novel => {
+                const option = document.createElement('option');
+                option.value = novel.id;
+                option.textContent = `${novel.title} (${novel.author || '未知作者'})`;
+                
+                selector.appendChild(option.cloneNode(true));
+                patternSelector.appendChild(option);
+            });
+        }
+        
+        // 添加小说到比较列表
+        function addNovelToComparison() {
+            const selector = document.getElementById('novelSelector');
+            const novelId = selector.value;
+            const novelText = selector.options[selector.selectedIndex].text;
+            
+            if (!novelId) {
+                alert('请先选择小说');
+                return;
+            }
+            
+            if (selectedNovels.find(n => n.id === novelId)) {
+                alert('该小说已在比较列表中');
+                return;
+            }
+            
+            selectedNovels.push({ id: novelId, text: novelText });
+            updateNovelListText();
+        }
+        
+        // 更新已选择小说列表显示
+        function updateNovelListText() {
+            const textElement = document.getElementById('novelListText');
+            if (selectedNovels.length === 0) {
+                textElement.textContent = '无';
+            } else {
+                textElement.textContent = selectedNovels.map(n => n.text).join('，');
+            }
+        }
+        
+        // 清空比较列表
+        function clearComparison() {
+            selectedNovels = [];
+            updateNovelListText();
+            if (densityChart) {
+                densityChart.destroy();
+                densityChart = null;
+            }
+        }
+        
+        // 生成设定密度图表
+        async function generateDensityChart() {
+            if (selectedNovels.length === 0) {
+                alert('请先添加小说到比较列表');
+                return;
+            }
+            
+            try {
+                const densityData = [];
+                
+                for (const novel of selectedNovels) {
+                    const res = await fetch(`/api/novels/${novel.id}/density`);
+                    const data = await res.json();
+                    densityData.push({
+                        novel: novel.text,
+                        density: data.density,
+                        entities: data.entities_count,
+                        properties: data.properties_count,
+                        relationships: data.relationships_count,
+                        word_count: data.word_count
+                    });
+                }
+                
+                renderDensityChart(densityData);
+            } catch (error) {
+                console.error('获取密度数据失败:', error);
+                alert('获取密度数据失败，请稍后重试');
+            }
+        }
+        
+        // 渲染密度图表
+        function renderDensityChart(data) {
+            const ctx = document.getElementById('densityChart').getContext('2d');
+            
+            if (densityChart) {
+                densityChart.destroy();
+            }
+            
+            densityChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d.novel.split('(')[0]), // 只显示标题部分
+                    datasets: [
+                        {
+                            label: '设定密度',
+                            data: data.map(d => d.density),
+                            backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            title: {
+                                display: true,
+                                text: '设定密度'
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                afterBody: function(context) {
+                                    const data = data[context[0].dataIndex];
+                                    return [
+                                        `总字数: ${data.word_count}`,
+                                        `实体数: ${data.entities}`,
+                                        `属性数: ${data.properties}`,
+                                        `关系数: ${data.relationships}`
+                                    ];
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 分析图模式
+        async function analyzePatterns() {
+            const novelId = document.getElementById('patternNovelSelector').value;
+            const patternCount = document.getElementById('patternCount').value;
+            
+            if (!novelId) {
+                alert('请先选择小说');
+                return;
+            }
+            
+            try {
+                const resultsElement = document.getElementById('patternResults');
+                resultsElement.innerHTML = '<div class="loading">分析中...</div>';
+                
+                const res = await fetch(`/api/novels/${novelId}/frequent_patterns?count=${patternCount}`);
+                const patterns = await res.json();
+                
+                renderPatterns(patterns);
+            } catch (error) {
+                console.error('分析图模式失败:', error);
+                document.getElementById('patternResults').innerHTML = '<div class="loading">分析失败，请稍后重试</div>';
+            }
+        }
+        
+        // 渲染图模式结果
+        function renderPatterns(patterns) {
+            const resultsElement = document.getElementById('patternResults');
+            
+            if (!patterns || patterns.length === 0) {
+                resultsElement.innerHTML = '<div class="loading">未找到频繁子图模式</div>';
+                return;
+            }
+            
+            let html = '<div class="pattern-grid">';
+            
+            patterns.forEach((pattern, index) => {
+                const graphId = `patternGraph${index}`;
+                
+                html += `
+                    <div class="pattern-card">
+                        <div class="pattern-info">
+                            <h4>模式 ${index + 1}</h4>
+                            <p>支持度: ${pattern.support} 次</p>
+                            <p>节点类型: ${pattern.node_types ? pattern.node_types.join(', ') : '未知'}</p>
+                        </div>
+                        <div id="${graphId}" class="graph-container"></div>
+                        <div class="pattern-examples">
+                            <h5>具体例子：</h5>
+                            <ul>
+                                ${pattern.examples ? pattern.examples.map(example => 
+                                    `<li>${example.subject} → ${example.object} : ${example.relation}</li>`
+                                ).join('') : '<li>无具体例子</li>'}
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            resultsElement.innerHTML = html;
+            
+            // 渲染每个图
+            patterns.forEach((pattern, index) => {
+                const graphId = `patternGraph${index}`;
+                renderPatternGraph(graphId, pattern);
+            });
+        }
+        
+        // 渲染单个图模式
+        function renderPatternGraph(containerId, pattern) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            
+            const nodes = new vis.DataSet(pattern.nodes || []);
+            const edges = new vis.DataSet(pattern.edges || []);
+            
+            const data = {
+                nodes: nodes,
+                edges: edges
+            };
+            
+            const options = {
+                layout: {
+                    improvedLayout: true
+                },
+                physics: {
+                    enabled: true,
+                    stabilization: true
+                },
+                nodes: {
+                    shape: 'dot',
+                    size: 20,
+                    font: {
+                        size: 12,
+                        face: 'Segoe UI'
+                    },
+                    borderWidth: 2
+                },
+                edges: {
+                    width: 2,
+                    smooth: {
+                        enabled: true,
+                        type: 'continuous'
+                    },
+                    arrows: {
+                        to: { enabled: true, scaleFactor: 0.8 }
+                    },
+                    font: {
+                        size: 10,
+                        face: 'Segoe UI'
+                    }
+                }
+            };
+            
+            new vis.Network(container, data, options);
+        }
+        
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadNovels();
+        });
+    </script>
+</body>
+</html>

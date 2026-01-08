@@ -1,0 +1,1664 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>小说详情</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background-color: #f5f7fa; }
+        .container { display: flex; gap: 20px; height: 80vh; }
+        .left-panel { flex: 0 0 300px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow-y: auto; }
+        .right-panel { flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        
+        .chapter-item { margin: 5px 0; padding: 10px; background: #f8f9fa; border-radius: 4px; cursor: pointer; transition: all 0.2s; border: 1px solid #e9ecef; }
+        .chapter-item:hover { background: #e9ecef; transform: translateX(2px); }
+        .chapter-item.active { background: #e3f2fd; border-color: #90caf9; }
+        
+        .btn-group { display: flex; gap: 5px; margin-top: 5px; }
+        button { padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .btn-extract { background: #4caf50; color: white; }
+        .btn-view { background: #2196f3; color: white; }
+        .btn-main { padding: 8px 16px; font-size: 14px; margin-bottom: 10px; background: #673ab7; color: white; }
+        
+        /* Tabs */
+        .tabs { display: flex; border-bottom: 1px solid #dee2e6; margin-bottom: 15px; }
+        .tab { padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab.active { border-bottom-color: #2196f3; color: #2196f3; font-weight: bold; }
+        
+        .tab-content { display: none; flex: 1; overflow-y: auto; }
+        .tab-content.active { display: block; }
+        
+        /* Content Styling */
+        .entity-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 4px; padding: 10px; margin-bottom: 10px; }
+        .entity-header { font-weight: bold; color: #333; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 5px; display: flex; justify-content: space-between; }
+        .entity-type { font-size: 0.8em; color: #666; background: #eee; padding: 2px 6px; border-radius: 10px; }
+        .prop-row { display: flex; margin: 2px 0; font-size: 0.9em; }
+        .prop-key { color: #666; width: 80px; flex-shrink: 0; }
+        .prop-val { color: #333; }
+        
+        .change-log { font-family: monospace; font-size: 0.9em; }
+        .change-item { padding: 5px; border-bottom: 1px solid #eee; }
+        .change-new { color: #2e7d32; background: #e8f5e9; }
+        .change-mod { color: #f57c00; background: #fff3e0; }
+        .change-del { color: #c62828; background: #ffebee; }
+        
+        /* Main Navigation */
+        .main-nav {
+            display: flex;
+            background: white;
+            padding: 0 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        .nav-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-right: 40px;
+            color: #333;
+            padding: 15px 0;
+        }
+        .nav-item {
+            padding: 15px 20px;
+            cursor: pointer;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .nav-item:hover { color: #2196f3; background: #f8f9fa; }
+        .nav-item.active { color: #2196f3; border-bottom-color: #2196f3; }
+
+        /* View Containers */
+        .view-container { display: none; }
+        .view-container.active { display: block; }
+
+        /* Search View Styles */
+        .search-panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .search-panel input { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+        .results-panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); min-height: 400px; }
+        #timelineContainer { position: relative; padding: 20px 0; }
+        .timeline-item { display: flex; margin-bottom: 20px; }
+        .timeline-chapter { width: 100px; text-align: right; padding-right: 20px; font-weight: bold; color: #673ab7; flex-shrink: 0; }
+        .timeline-content { flex: 1; border-left: 3px solid #90caf9; padding-left: 20px; }
+        .change-card { background: #e3f2fd; border-radius: 4px; padding: 10px; margin-bottom: 10px; }
+        .change-key { font-weight: bold; }
+
+        .sticky-search {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 10px 0;
+            z-index: 10;
+        }
+        
+        #graphContainer { width: 100%; height: 100%; min-height: 400px; }
+
+        /* Graph Controls Styling */
+        .graph-controls {
+            padding: 15px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .search-group {
+            display: flex;
+            gap: 5px;
+            flex: 1;
+            max-width: 400px;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+
+        .btn-search {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .category-filters {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .category-tag {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.9em;
+            background: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            border: 1px solid #dee2e6;
+        }
+
+        .update-panel {
+            margin-top: 5px;
+            padding-top: 10px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 36px;
+            height: 20px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 20px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: #2196f3; }
+        input:checked + .slider:before { transform: translateX(16px); }
+        
+        /* Loading Overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: white;
+            font-size: 20px;
+            flex-direction: column;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loadingText">处理中...</div>
+    </div>
+
+    <div style="margin-bottom: 10px;">
+        <a href="/" style="text-decoration: none; color: #666;">&larr; 返回首页</a>
+    </div>
+
+    <div class="main-nav">
+        <div class="nav-title">小说详情</div>
+        <div class="nav-item active" onclick="switchMainView('analysis')">章节分析</div>
+        <div class="nav-item" onclick="switchMainView('search')">全局检索</div>
+    </div>
+    
+    <!-- Analysis View -->
+    <div id="analysisView" class="view-container active">
+        <div class="container">
+            <div class="left-panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">章节列表</h3>
+                <div id="chapterActions">
+                    <button class="btn-main" onclick="importChapter()">+ 自动导入下一章</button>
+                    <button class="btn-main" onclick="extractNextChapterSettings()">提取下一章设定</button>
+                    <button class="btn-main" style="background: #d32f2f;" onclick="deleteLatestChapter()">- 删除最新章</button>
+                </div>
+            </div>
+            
+            <!-- Batch Deletion Panel -->
+            <div style="background: #ffebf0; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid #f48fb1;">
+                <div style="font-weight: bold; margin-bottom: 5px; color: #c2185b;">批量删除章节</div>
+                <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+                    <input type="number" id="batchDeleteStart" placeholder="始" style="width: 50px; padding: 4px;">
+                    <span id="batchDeleteEndLabel"></span>
+                    <button class="btn-extract" style="background: #c2185b;" onclick="runBatchDelete()">执行</button>
+                </div>
+            </div>
+
+            <!-- Batch Rollback Panel -->
+            <div style="background: #fff3e0; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid #ffcc80;">
+                <div style="font-weight: bold; margin-bottom: 5px; color: #e65100;">批量回滚设定（不删除章节）</div>
+                <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+                    <input type="number" id="batchRollbackStart" placeholder="始" style="width: 50px; padding: 4px;">
+                    <span id="batchRollbackEndLabel"></span>
+                    <button class="btn-extract" style="background: #fb8c00;" onclick="runBatchRollback()">执行</button>
+                </div>
+            </div>
+
+            <!-- Batch Extraction Panel -->
+            <div style="background: #e8f5e9; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid #a5d6a7;">
+                <div style="font-weight: bold; margin-bottom: 5px; color: #2e7d32;">批量提取设定（未导入的章节会自动导入）</div>
+                <div style="display: flex; gap: 5px; align-items: center; margin-bottom: 5px;">
+                    <span id="batchExtractStartLabel" style="font-weight: bold;">21</span>
+                    <span>-</span>
+                    <input type="number" id="batchExtractEnd" placeholder="终" style="width: 50px; padding: 4px;">
+                    <button class="btn-extract" onclick="runBatchExtract()">执行</button>
+                </div>
+            </div>
+
+            <div id="chapterList"></div>
+        </div>
+        
+        <div class="right-panel">
+            <div id="rightPanelHeader" style="padding-bottom: 10px; border-bottom: 1px solid #eee; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                <h2 id="currentChapterTitle" style="margin: 0; font-size: 1.2em; color: #333;">请选择章节</h2>
+            </div>
+
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('content')">章节内容</div>
+                <div class="tab" onclick="switchTab('settings')">当前设定</div>
+                <div class="tab" onclick="switchTab('changes')">本章变更</div>
+                <div class="tab" onclick="switchTab('graph')">知识图谱</div>
+                <div class="tab" onclick="switchTab('conflicts')">冲突检测</div>
+                <div class="tab" onclick="switchTab('chat')">AI对话</div>
+            </div>
+            
+            <div id="contentTab" class="tab-content active" style="display: block;">
+                <div id="chapterContentView" style="white-space: pre-wrap; line-height: 1.6; font-size: 1.1em; padding: 10px;">请选择左侧章节查看内容</div>
+            </div>
+            
+            <div id="settingsTab" class="tab-content" style="flex-direction: column;">
+                <div class="sticky-search">
+                    <input type="text" id="settingSearch" placeholder="全文检索设定..." onkeyup="filterSettings()" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+                </div>
+                <div id="settingsView" style="flex: 1; overflow-y: auto;">请选择左侧章节查看设定</div>
+            </div>
+            
+            <div id="changesTab" class="tab-content">
+                <div id="changesView">请选择左侧章节查看变更</div>
+            </div>
+            
+            <div id="graphTab" class="tab-content" style="height: 100%; flex-direction: column;">
+                <div class="graph-controls">
+                    <div class="control-row">
+                        <div class="search-group">
+                            <input type="text" id="graphSearch" placeholder="搜索实体名称..." class="search-input">
+                            <button onclick="applyGraphFilters()" class="btn-search">搜索</button>
+                        </div>
+                        <div class="filter-group">
+                            <span style="color: #666; font-size: 0.9em;">类别筛选:</span>
+                            <div id="graphCategoryFilters" class="category-filters"></div>
+                        </div>
+                    </div>
+                    <!-- Shortest path controls -->
+                    <div class="control-row" style="margin-top:8px; align-items:center; gap:8px;">
+                        <input type="text" id="pathSource" placeholder="源实体名称或ID" class="search-input" style="max-width:220px;">
+                        <input type="text" id="pathTarget" placeholder="目标实体名称或ID" class="search-input" style="max-width:220px;">
+                        <button class="btn-view" onclick="findShortestPath()" style="padding:6px 10px;">查找最短路径</button>
+                        <button class="btn-extract" onclick="clearPathHighlight()" style="background:#9e9e9e; padding:6px 10px;">清除高亮</button>
+                        <span style="color:#666; font-size:0.9em; margin-left:8px;">或在图中依次点击两个节点以选择源/目标</span>
+                    </div>
+                    
+                    <div class="update-panel">
+                        <label class="switch">
+                            <input type="checkbox" id="showUpdatesOnly" onchange="toggleUpdateMode()" checked>
+                            <span class="slider round"></span>
+                        </label>
+                        <span style="font-weight: 500;">只看近期更新内容</span>
+                        
+                        <div id="updateSettings" style="display: flex; align-items: center; gap: 5px; margin-left: 10px;">
+                            <span style="color: #666;">最近</span>
+                            <input type="number" id="updateChapterRange" value="10" min="1" style="width: 50px; padding: 4px; border: 1px solid #ccc; border-radius: 4px;">
+                            <span style="color: #666;">章</span>
+                            <button onclick="loadGraph(currentChapterNum)" class="btn-view" style="padding: 4px 8px;">刷新数据</button>
+                            <button onclick="exportGraphImage()" class="btn-view" style="padding: 4px 8px; background: #4caf50;">导出图片</button>
+                            <button onclick="exportGraphJSON()" class="btn-view" style="padding: 4px 8px; background: #ff9800;">导出 JSON</button>
+                            <button onclick="exportGraphCSV()" class="btn-view" style="padding: 4px 8px; background: #ff5722;">导出 CSV</button>
+                        </div>
+
+                        <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+                            <label class="switch">
+                                <input type="checkbox" id="hideText" onchange="applyGraphFilters()">
+                                <span class="slider round"></span>
+                            </label>
+                            <span style="font-weight: 500;">隐藏文字</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="graphStats" style="padding:10px; border:1px solid #eee; border-radius:4px; margin:8px 0; background:#fafafa; display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
+                    <div id="graphSummary" style="font-size:0.95em; color:#333;">节点总数: 0 &nbsp; 关系总数: 0</div>
+                    <div id="graphCategoryStats" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; color:#555;"></div>
+                </div>
+                <div id="graphContainer" style="flex: 1;"></div>
+            </div>
+
+            <div id="conflictsTab" class="tab-content">
+                <div style="margin-bottom: 15px; padding: 10px; background: #fff3e0; border-radius: 4px; border: 1px solid #ffe0b2;">
+                    <h4 style="margin-top: 0; color: #e65100;">冲突检测说明</h4>
+                    <p style="margin: 5px 0; font-size: 0.9em; color: #555;">系统将对比“上一章的设定”与“本章内容”，查找逻辑矛盾（如死而复生、性别错误等）。</p>
+                    <button class="btn-main" onclick="detectConflicts()" style="margin-top: 10px;">开始检测本章冲突</button>
+                </div>
+                <div id="conflictsView"></div>
+            </div>
+
+            <div id="chatTab" class="tab-content" style="flex-direction: column; height: 100%;">
+                <div id="chatHistory" style="flex: 1; overflow-y: auto; border: 1px solid #eee; padding: 15px; margin-bottom: 10px; background: #f9f9f9; border-radius: 4px;">
+                    <div style="color: #999; text-align: center; margin-top: 20px;">
+                        <p>我是基于本章内容和已有设定的 AI 助手。</p>
+                        <p>你可以问我关于剧情、设定或本章细节的问题。</p>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="chatInput" placeholder="输入问题..." style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px;" onkeypress="if(event.key==='Enter') sendChatMessage()">
+                    <button class="btn-view" onclick="sendChatMessage()" style="padding: 0 20px;">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- Search View -->
+    <div id="searchView" class="view-container">
+        <div class="search-panel">
+            <div style="flex: 1; max-width: 300px; position: relative;">
+                <input type="text" id="entityName" list="entity-suggestions" placeholder="输入实体名称..." style="width: 100%; box-sizing: border-box;" oninput="handleEntityInput(this.value)">
+                <datalist id="entity-suggestions"></datalist>
+            </div>
+            <input type="number" id="startChapter" placeholder="起始章节" style="width: 80px;">
+            <input type="number" id="endChapter" placeholder="结束章节" style="width: 80px;">
+            <button onclick="searchHistory()" class="btn-view">检索变更历史</button>
+        </div>
+
+        <div class="results-panel">
+            <h3 id="resultsTitle" style="margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px;">检索结果</h3>
+            <div id="timelineContainer">
+                <div style="color: #666; text-align: center; padding: 40px;">请输入实体名称和章节范围进行检索</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const novelId = "{{ novel_id }}";
+        let currentChapterCount = 0;
+        let currentChapterNum = 0;
+        let latestExtractedChapter = 0;
+        let graphChart = null;
+        let allGraphData = null; // Store all graph data to allow for filtering
+        let lastRenderedGraph = null; // 保存最近一次渲染的子图，用于导出
+        let highlightedPath = null; // { nodes: [...], links: [...] }
+        // 点击选择路径时的状态：0 表示等待选择源，1 表示已选源等待目标
+        let pathSelectionState = 0;
+
+        function switchMainView(viewName) {
+            // Update Nav
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.getAttribute('onclick').includes(viewName)) {
+                    item.classList.add('active');
+                }
+            });
+
+            // Update View
+            document.querySelectorAll('.view-container').forEach(view => {
+                view.classList.remove('active');
+            });
+            document.getElementById(viewName + 'View').classList.add('active');
+            
+            // Resize graph if switching to analysis view
+            if (viewName === 'analysis' && graphChart) {
+                setTimeout(() => graphChart.resize(), 100);
+            }
+
+            // Initialize search view defaults
+            if (viewName === 'search') {
+                if (!document.getElementById('startChapter').value) {
+                    document.getElementById('startChapter').value = 1;
+                }
+                if (!document.getElementById('endChapter').value && latestExtractedChapter > 0) {
+                    document.getElementById('endChapter').value = latestExtractedChapter;
+                }
+            }
+        }
+
+        let searchTimeout = null;
+        async function handleEntityInput(value) {
+            if (!value) return;
+            
+            if (searchTimeout) clearTimeout(searchTimeout);
+            
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/api/search/suggest?novel_id=${novelId}&query=${encodeURIComponent(value)}`);
+                    const suggestions = await res.json();
+                    
+                    const datalist = document.getElementById('entity-suggestions');
+                    datalist.innerHTML = suggestions.map(s => `<option value="${s}">`).join('');
+                } catch (e) {
+                    console.error("Failed to fetch suggestions", e);
+                }
+            }, 300); // Debounce 300ms
+        }
+
+        async function searchHistory() {
+            const entityName = document.getElementById('entityName').value;
+            const startChapter = document.getElementById('startChapter').value;
+            const endChapter = document.getElementById('endChapter').value;
+
+            if (!entityName || !startChapter || !endChapter) {
+                alert('请输入完整的检索条件');
+                return;
+            }
+            
+            showLoading('正在检索...');
+
+            try {
+                const res = await fetch(`/api/search/entity_history?novel_id=${novelId}&entity_name=${entityName}&start_chapter=${startChapter}&end_chapter=${endChapter}`);
+                const data = await res.json();
+
+                document.getElementById('resultsTitle').innerText = `"${entityName}" 的设定变更历史 (${startChapter}-${endChapter}章)`;
+                const container = document.getElementById('timelineContainer');
+                container.innerHTML = '';
+
+                if (data.error) {
+                    container.innerHTML = `<p style="color: red;">错误: ${data.error}</p>`;
+                    return;
+                }
+                if (data.length === 0) {
+                    container.innerHTML = '<p>未找到相关变更记录。</p>';
+                    return;
+                }
+
+                data.forEach(item => {
+                    let changesHtml = '';
+                    if (item.change_type === 'new_entity') {
+                        changesHtml = `<div class="change-card"><strong>实体创建</strong>: 类型为 ${item.details.type}</div>`;
+                    } else if (item.change_type === 'property_change') {
+                        changesHtml = `<div class="change-card"><span class="change-key">${item.details.key}</span>: 变为 <strong>${item.details.value}</strong></div>`;
+                    }
+
+                    container.innerHTML += `
+                        <div class="timeline-item">
+                            <div class="timeline-chapter">第 ${item.chapter_number} 章</div>
+                            <div class="timeline-content">${changesHtml}</div>
+                        </div>
+                    `;
+                });
+            } catch (e) {
+                alert('检索失败: ' + e.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function generateColors(count) {
+            const colors = [];
+            for (let i = 0; i < count; i++) {
+                const hue = (i * 360 / count) % 360;
+                colors.push(`hsl(${hue}, 70%, 50%)`);
+            }
+            return colors;
+        }
+
+        function switchTab(tabName) {
+            // Deactivate all tabs and hide all content
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => {
+                c.classList.remove('active');
+                c.style.display = 'none'; // Directly hide all content
+            });
+            
+            // Activate the selected tab
+            const activeTab = document.querySelector(`.tab[onclick="switchTab('${tabName}')"]`);
+            activeTab.classList.add('active');
+            
+            // Show the selected content
+            const activeContent = document.getElementById(`${tabName}Tab`);
+            activeContent.classList.add('active');
+            // Restore its intended display style.
+            if (['settings', 'graph', 'chat'].includes(tabName)) {
+                 activeContent.style.display = 'flex';
+            } else {
+                 activeContent.style.display = 'block';
+            }
+            
+            if (tabName === 'graph' && currentChapterNum > 0) {
+                loadGraph(currentChapterNum);
+            }
+        }
+
+        async function loadChapters() {
+            const res = await fetch(`/api/novels/${novelId}/chapters`);
+            const data = await res.json();
+            const chapters = data.chapters;
+            latestExtractedChapter = data.latest_extracted_chapter;
+            
+            currentChapterCount = chapters.length;
+            
+            const list = document.getElementById('chapterList');
+            list.innerHTML = chapters.map(c => {
+                let chapterClass = 'chapter-item';
+                let statusIndicator = '';
+                if (c.status === 'extracted') {
+                    statusIndicator = '<span style="color: green; font-size: 12px; margin-left: 10px;">● 已提取</span>';
+                } else {
+                    statusIndicator = '<span style="color: orange; font-size: 12px; margin-left: 10px;">○ 未提取</span>';
+                }
+
+                if (c.number === currentChapterNum) {
+                    chapterClass += ' active';
+                }
+
+                return `
+                <div class="${chapterClass}" onclick="selectChapter(${c.number}, this)">
+                    <div style="font-weight: bold;">第 ${c.number} 章: ${c.title} ${statusIndicator}</div>
+                </div>
+            `}).join('');
+
+            // Update batch delete end label
+            document.getElementById('batchDeleteEndLabel').textContent = `- ${currentChapterCount}`;
+            document.getElementById('batchRollbackEndLabel').textContent = `- ${latestExtractedChapter}`;
+            document.getElementById('batchExtractStartLabel').textContent = latestExtractedChapter + 1;
+
+        }
+
+        async function selectChapter(num, el) {
+            currentChapterNum = num;
+            document.querySelectorAll('.chapter-item').forEach(i => i.classList.remove('active'));
+            el.classList.add('active');
+            
+            // Update Header Title
+            let titleText = el.innerText.replace(/● 已提取|○ 未提取/g, '').trim();
+            document.getElementById('currentChapterTitle').innerText = titleText;
+
+            // Determine active tab
+            const activeTab = document.querySelector('.tab.active');
+            const tabName = activeTab ? activeTab.getAttribute('onclick').match(/'(.*?)'/)[1] : 'content';
+
+            // Clear previous conflict/chat results when switching chapters
+            document.getElementById('conflictsView').innerHTML = '';
+            document.getElementById('chatHistory').innerHTML = '<div style="color: #999; text-align: center; margin-top: 20px;"><p>我是基于本章内容和已有设定的 AI 助手。</p><p>你可以问我关于剧情、设定或本章细节的问题。</p></div>';
+
+            // Always load content, settings and changes
+            viewChapterContent(num);
+            viewSettings(num);
+            viewChanges(num);
+            
+            // Only load graph if it is the active tab
+            if (tabName === 'graph') {
+                loadGraph(num);
+            }
+        }
+
+        async function viewChapterContent(chapterNum) {
+            try {
+                const res = await fetch(`/api/novels/${novelId}/chapters/${chapterNum}/content`);
+                const data = await res.json();
+                if (data.content) {
+                    document.getElementById('chapterContentView').innerText = data.content;
+                } else {
+                    document.getElementById('chapterContentView').innerText = "无法获取章节内容";
+                }
+
+                // Render saved conflicts if any
+                if (data.conflict_result) {
+                    renderConflicts(data.conflict_result);
+                } else {
+                    document.getElementById('conflictsView').innerHTML = '';
+                }
+            } catch (e) {
+                document.getElementById('chapterContentView').innerText = "加载失败: " + e.message;
+            }
+        }
+
+        function renderConflicts(data) {
+            const container = document.getElementById('conflictsView');
+            if (data.error) {
+                container.innerHTML = `<p style="color: red;">检测出错: ${data.error}</p>`;
+                return;
+            }
+            
+            if (!data.conflicts || data.conflicts.length === 0) {
+                container.innerHTML = `<div style="padding: 20px; text-align: center; color: green; background: #e8f5e9; border-radius: 4px;">未发现明显的逻辑冲突。</div>`;
+                return;
+            }
+            
+            let html = '';
+            data.conflicts.forEach(c => {
+                const startChapterInfo = c.start_chapter ? `<span style="font-size: 0.8em; color: #666; margin-left: 10px;">(设定始于第 ${c.start_chapter} 章)</span>` : '';
+                html += `
+                    <div class="entity-card" style="border-left: 4px solid #f44336;">
+                        <div style="font-weight: bold; color: #d32f2f; margin-bottom: 5px;">发现冲突</div>
+                        <div style="margin-bottom: 5px;"><strong>原文片段:</strong> <span style="background: #ffebee; padding: 2px 4px;">${c.original_text}</span></div>
+                        <div style="margin-bottom: 5px;">
+                            <strong>冲突设定:</strong> ${c.conflicting_setting}
+                            ${startChapterInfo}
+                        </div>
+                        <div style="color: #666; font-size: 0.9em;">${c.description}</div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        async function detectConflicts() {
+            if (!currentChapterNum) return alert("请先选择章节");
+            
+            showLoading("正在进行冲突检测，请稍候...");
+            try {
+                const res = await fetch(`/api/novels/${novelId}/chapters/${currentChapterNum}/detect_conflicts`, { method: 'POST' });
+                const data = await res.json();
+                renderConflicts(data);
+            } catch (e) {
+                alert("请求失败: " + e.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const query = input.value.trim();
+            if (!query) return;
+            
+            if (!currentChapterNum) return alert("请先选择章节");
+
+            const history = document.getElementById('chatHistory');
+            
+            // User message
+            history.innerHTML += `
+                <div style="margin-bottom: 10px; text-align: right;">
+                    <div style="display: inline-block; background: #e3f2fd; padding: 8px 12px; border-radius: 12px 12px 0 12px; max-width: 80%; text-align: left;">
+                        ${query}
+                    </div>
+                </div>
+            `;
+            input.value = '';
+            history.scrollTop = history.scrollHeight;
+            
+            // Loading message
+            const loadingId = 'loading-' + Date.now();
+            history.innerHTML += `
+                <div id="${loadingId}" style="margin-bottom: 10px;">
+                    <div style="display: inline-block; background: #f5f5f5; padding: 8px 12px; border-radius: 12px 12px 12px 0; max-width: 80%;">
+                        思考中...
+                    </div>
+                </div>
+            `;
+            history.scrollTop = history.scrollHeight;
+
+            try {
+                const res = await fetch(`/api/novels/${novelId}/chapters/${currentChapterNum}/chat`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ query: query })
+                });
+                const data = await res.json();
+                
+                // Remove loading
+                document.getElementById(loadingId).remove();
+                
+                // AI response
+                const responseText = data.response || data.error || "无响应";
+                history.innerHTML += `
+                    <div style="margin-bottom: 10px;">
+                        <div style="display: inline-block; background: #f5f5f5; padding: 8px 12px; border-radius: 12px 12px 12px 0; max-width: 80%;">
+                            ${responseText.replace(/\n/g, '<br>')}
+                        </div>
+                    </div>
+                `;
+                
+            } catch (e) {
+                document.getElementById(loadingId).innerHTML = `<span style="color: red;">发送失败: ${e.message}</span>`;
+            }
+            
+            history.scrollTop = history.scrollHeight;
+        }
+
+        async function importChapter() {
+            const nextNum = currentChapterCount + 1;
+            
+            if(!confirm(`确定要导入第 ${nextNum} 章吗？`)) return;
+
+            showLoading(`正在导入第 ${nextNum} 章...`);
+            try {
+                const res = await fetch(`/api/novels/${novelId}/import_next`, {
+                    method: 'POST'
+                });
+                const json = await res.json();
+                
+                if (!res.ok) {
+                    throw new Error(json.error || "Import failed");
+                }
+                
+                alert(json.message);
+                await loadChapters();
+                
+            } catch (e) {
+                alert("操作失败: " + e.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function extractNextChapterSettings() {
+            showLoading('正在提取下一章设定...');
+            try {
+                const res = await fetch(`/api/novels/${novelId}/extract_next_settings`, { method: 'POST' });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || '提取失败');
+                }
+                const result = await res.json();
+                alert(result.message);
+                await loadChapters();
+            } catch (e) {
+                alert(`错误: ${e.message}`);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function deleteLatest() {
+            if(!confirm('确定删除最新一章并回滚设定吗？')) return;
+            showLoading("正在回滚设定...");
+            try {
+                const res = await fetch(`/api/novels/${novelId}/chapters/latest`, { method: 'DELETE' });
+                const json = await res.json();
+                alert(json.message || json.error);
+                loadChapters();
+                document.getElementById('settingsView').innerHTML = "已回滚，请重新选择章节";
+                document.getElementById('changesView').innerHTML = "";
+                if(graphChart) graphChart.clear();
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function clearViews() {
+            // Reset selection and clear all views
+            currentChapterNum = 0;
+            document.querySelectorAll('.chapter-item').forEach(i => i.classList.remove('active'));
+            const titleEl = document.getElementById('currentChapterTitle');
+            if (titleEl) titleEl.innerText = '未选择章节';
+            const contentEl = document.getElementById('chapterContentView');
+            if (contentEl) contentEl.innerText = '';
+            const settingsEl = document.getElementById('settingsView');
+            if (settingsEl) settingsEl.innerHTML = '';
+            const changesEl = document.getElementById('changesView');
+            if (changesEl) changesEl.innerHTML = '';
+            const conflictsEl = document.getElementById('conflictsView');
+            if (conflictsEl) conflictsEl.innerHTML = '';
+            const chatEl = document.getElementById('chatHistory');
+            if (chatEl) chatEl.innerHTML = '<div style="color: #999; text-align: center; margin-top: 20px;"><p>我是基于本章内容和已有设定的 AI 助手。</p><p>你可以问我关于剧情、设定或本章细节的问题。</p></div>';
+            if (graphChart) {
+                graphChart.clear();
+                const gc = document.getElementById('graphContainer');
+                if (gc) gc.innerHTML = '<div style="text-align:center;color:#999;padding:20px;">暂无图谱</div>';
+            }
+        }
+
+        async function deleteLatestChapter() {
+            if (!confirm('确定要删除最新一章及其设定吗？此操作不可逆。')) return;
+            showLoading('正在删除最新章节...');
+            try {
+                const res = await fetch(`/api/novels/${novelId}/chapters/delete_latest`, { method: 'POST' });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || '删除失败');
+                }
+                const result = await res.json();
+                alert(result.message);
+                // Reset selection if the deleted chapter was selected
+                if (currentChapterNum === currentChapterCount) {
+                    currentChapterNum = 0;
+                    clearViews();
+                }
+                await loadChapters();
+            } catch (e) {
+                alert(`错误: ${e.message}`);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function extractSettings(chapterNum, silent = false) {
+            if (!silent) showLoading(`正在提取第 ${chapterNum} 章设定，请耐心等待...`);
+            try {
+                const res = await fetch(`/api/novels/${novelId}/chapters/${chapterNum}/extract`, { method: 'POST' });
+                const json = await res.json();
+                if (!silent) alert(json.message || json.error);
+                if (currentChapterNum === chapterNum) {
+                    selectChapter(chapterNum, document.querySelector(`.chapter-item.active`));
+                }
+                return res.ok;
+            } catch (e) {
+                if (!silent) alert("请求失败: " + e);
+                return false;
+            } finally {
+                if (!silent) hideLoading();
+            }
+        }
+
+        async function runBatchRange() {
+            const start = parseInt(document.getElementById('batchStart').value);
+            const end = parseInt(document.getElementById('batchEnd').value);
+            
+            if (!start || !end || start > end) {
+                return alert("请输入有效的起始和结束章节号");
+            }
+            
+            await processBatch(start, end);
+        }
+
+        async function processBatch(start, end) {
+            showLoading(`准备批量提取: ${start} - ${end} 章`);
+            let successCount = 0;
+            let failCount = 0;
+            
+            for (let i = start; i <= end; i++) {
+                // Auto-import if needed
+                if (i > currentChapterCount) {
+                    if (i !== currentChapterCount + 1) {
+                        alert(`无法跳过章节导入。当前最新: ${currentChapterCount}, 请求: ${i}`);
+                        failCount += (end - i + 1);
+                        break;
+                    }
+                    
+                    showLoading(`正在自动导入第 ${i} 章...`);
+                    try {
+                        const res = await fetch(`/api/novels/${novelId}/import_next`, { method: 'POST' });
+                        if (!res.ok) throw new Error("Import failed");
+                        await loadChapters(); 
+                    } catch (e) {
+                        console.error(e);
+                        alert(`导入第 ${i} 章失败: ${e.message}`);
+                        failCount += (end - i + 1);
+                        break;
+                    }
+                }
+
+                showLoading(`正在批量提取 (${i}/${end}): 第 ${i} 章...`);
+                const success = await extractSettings(i, true); // Silent mode
+                if (success) {
+                    successCount++;
+                } else {
+                    failCount++;
+                    // Optional: Stop on error?
+                    // if (!confirm(`第 ${i} 章提取失败，是否继续？`)) break;
+                }
+            }
+            
+            hideLoading();
+            alert(`批量处理完成。\n成功: ${successCount}\n失败: ${failCount}`);
+            
+            // Refresh current view if affected
+            if (currentChapterNum >= start && currentChapterNum <= end) {
+                const el = document.querySelector(`.chapter-item.active`);
+                if (el) selectChapter(currentChapterNum, el);
+            }
+        }
+
+        async function runBatchExtract() {
+            const endChapter = parseInt(document.getElementById('batchExtractEnd').value);
+            // 强制转换为整数，防止字符串拼接或 undefined
+            const safeLatestExtracted = parseInt(latestExtractedChapter) || 0;
+            
+            if (!endChapter || endChapter <= safeLatestExtracted) {
+                alert(`请输入一个大于 ${safeLatestExtracted} 的有效目标章节号。`);
+                return;
+            }
+
+            const startChapter = safeLatestExtracted + 1;
+
+            if (!confirm(`确定要从第 ${startChapter} 章开始，批量提取设定直到第 ${endChapter} 章吗？`)) {
+                return;
+            }
+
+            showLoading(`准备批量提取: ${startChapter} - ${endChapter} 章`);
+            console.log(`[Batch] Starting batch extraction from ${startChapter} to ${endChapter}`);
+            
+            let successCount = 0;
+            let failCount = 0;
+            let errors = [];
+            
+            // 临时变量用于跟踪章节导入状态
+            let tempChapterCount = parseInt(currentChapterCount) || 0;
+
+            try {
+                for (let i = startChapter; i <= endChapter; i++) {
+                    // 更新 Loading 文本
+                    const progressText = `正在处理第 ${i} 章 (${i - startChapter + 1}/${endChapter - startChapter + 1})...`;
+                    showLoading(progressText);
+                    console.log(`[Batch] Processing chapter ${i}`);
+                    
+                    // 给 UI 渲染一点时间 (可选，但在某些情况下有用)
+                    await new Promise(r => setTimeout(r, 10));
+
+                    try {
+                        // 1. 自动导入章节 (如果需要)
+                        if (i > tempChapterCount) {
+                            if (i !== tempChapterCount + 1) {
+                                throw new Error(`章节不连续，无法自动导入。当前最新: ${tempChapterCount}, 需要: ${i}`);
+                            }
+                            
+                            const res = await fetch(`/api/novels/${novelId}/import_next`, { method: 'POST' });
+                            if (!res.ok) {
+                                const err = await res.json();
+                                throw new Error(err.error || "自动导入失败");
+                            }
+                            tempChapterCount++;
+                        }
+                        
+                        // 2. 提取设定
+                        const res = await fetch(`/api/novels/${novelId}/chapters/${i}/extract`, { method: 'POST' });
+                        if (!res.ok) {
+                            const err = await res.json();
+                            throw new Error(err.error || "提取失败");
+                        }
+                        
+                        successCount++;
+                        
+                    } catch (e) {
+                        console.error(e);
+                        failCount++;
+                        errors.push(`第 ${i} 章: ${e.message}`);
+                        
+                        if (!confirm(`第 ${i} 章处理失败: ${e.message}\n\n是否跳过错误继续处理后续章节？`)) {
+                            break;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Batch process fatal error:", err);
+                alert("批量处理发生严重错误: " + err.message);
+            } finally {
+                hideLoading();
+                
+                let report = `批量处理完成。\n成功: ${successCount}\n失败: ${failCount}`;
+                if (errors.length > 0) {
+                    report += `\n\n错误详情:\n` + errors.join('\n');
+                }
+                // 只有当确实执行了操作才弹窗，避免空循环弹窗
+                if (successCount > 0 || failCount > 0) {
+                    alert(report);
+                } else {
+                    console.warn("[Batch] No chapters processed.");
+                }
+                
+                await loadChapters();
+                
+                if (currentChapterNum >= startChapter && currentChapterNum <= endChapter) {
+                    const el = document.querySelector(`.chapter-item.active`);
+                    if (el) selectChapter(currentChapterNum, el);
+                }
+            }
+        }
+
+        function showLoading(text) {
+            if (typeof text === 'boolean') {
+                if (text) {
+                    text = '处理中...';
+                } else {
+                    hideLoading();
+                    return;
+                }
+            }
+            document.getElementById('loadingText').innerText = text;
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+
+        function filterSettings() {
+            const query = document.getElementById('settingSearch').value.toLowerCase();
+            const cards = document.querySelectorAll('#settingsView .entity-card');
+            const relList = document.querySelector('#settingsView .relationships-list');
+            const relItems = document.querySelectorAll('#settingsView .relationship-item');
+
+            cards.forEach(card => {
+                const cardText = card.innerText.toLowerCase();
+                if (cardText.includes(query)) {
+                    card.style.display = '';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            if (relList) {
+                let hasVisibleRel = false;
+                relItems.forEach(item => {
+                    const itemText = item.innerText.toLowerCase();
+                    if (itemText.includes(query)) {
+                        item.style.display = '';
+                        hasVisibleRel = true;
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+                // Hide "关系" title if no relations are visible
+                relList.style.display = hasVisibleRel || query === '' ? '' : 'none';
+            }
+        }
+
+        async function viewSettings(chapterNum) {
+            const res = await fetch(`/api/novels/${novelId}/chapters/${chapterNum}/settings`);
+            const settings = await res.json();
+            
+            let html = ``;
+            
+            if (settings.entities.length === 0) {
+                html += "<p>暂无设定数据</p>";
+            } else {
+                settings.entities.forEach(ent => {
+                    html += `
+                        <div class="entity-card">
+                            <div class="entity-header">
+                                <span>${ent.name}</span>
+                                <span class="entity-type">${ent.type}</span>
+                            </div>
+                            ${Object.entries(ent.properties).map(([k, v]) => `
+                                <div class="prop-row">
+                                    <span class="prop-key">${k}:</span>
+                                    <span class="prop-val">${v}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                });
+            }
+            
+            // Relationships
+            if (settings.relationships.length > 0) {
+                html += "<h5 class='relationships-list'>关系</h5><ul class='relationships-list'>";
+                settings.relationships.forEach(rel => {
+                    html += `<li class="relationship-item">${rel.subject} -> ${rel.object} : ${rel.relation}</li>`;
+                });
+                html += "</ul>";
+            }
+
+            document.getElementById('settingsView').innerHTML = html;
+        }
+
+        async function viewChanges(chapterNum) {
+            const res = await fetch(`/api/novels/${novelId}/chapters/${chapterNum}/changes`);
+            const changes = await res.json();
+            
+            let html = `<div class="change-log">`;
+            
+            // New Entities
+            changes.new_entities.forEach(e => {
+                html += `<div class="change-item change-new">[新增实体] ${e.name} (${e.type})</div>`;
+            });
+            
+            // New/Updated Properties
+            changes.new_properties.forEach(p => {
+                html += `<div class="change-item change-mod">[属性变更] ${p.entity_name}.${p.key} = ${p.value}</div>`;
+            });
+            
+            // New Relationships
+            changes.new_relationships.forEach(r => {
+                html += `<div class="change-item change-new">[新增关系] ${r.subject_name} -> ${r.object_name} : ${r.relation}</div>`;
+            });
+            
+            // Invalidated Properties
+            changes.invalidated_properties.forEach(p => {
+                html += `<div class="change-item change-del">[属性失效] ${p.entity_name}.${p.key} (原值: ${p.value})</div>`;
+            });
+            
+            // Invalidated Relationships
+            changes.invalidated_relationships.forEach(r => {
+                html += `<div class="change-item change-del">[关系失效] ${r.subject_name} -> ${r.object_name} : ${r.relation}</div>`;
+            });
+            
+            if (html === `<div class="change-log">`) {
+                html += "<div>本章无设定变更</div>";
+            }
+            
+            html += "</div>";
+            document.getElementById('changesView').innerHTML = html;
+        }
+
+        function toggleUpdateMode() {
+            const isChecked = document.getElementById('showUpdatesOnly').checked;
+            document.getElementById('updateSettings').style.display = isChecked ? 'flex' : 'none';
+            loadGraph(currentChapterNum);
+        }
+
+        async function loadGraph(chapterNum) {
+            if (!graphChart) {
+                graphChart = echarts.init(document.getElementById('graphContainer'));
+
+                // 点击节点用于快速选取源/目标
+                graphChart.on('click', function(params) {
+                    if (params.dataType !== 'node') return;
+                    const clickedId = params.data.id;
+                    const clickedName = params.data.name || '';
+                    const srcInput = document.getElementById('pathSource');
+                    const tgtInput = document.getElementById('pathTarget');
+
+                    if (!srcInput.value) {
+                        srcInput.value = clickedId;
+                        alert('已选择源: ' + clickedName + ' (' + clickedId + ')');
+                        return;
+                    }
+                    if (!tgtInput.value) {
+                        // 如果目标为空，设置并自动触发查询
+                        tgtInput.value = clickedId;
+                        alert('已选择目标: ' + clickedName + ' (' + clickedId + ')，正在查询最短路径');
+                        findShortestPath();
+                        return;
+                    }
+                    // 如果两者都已设置，则将本次点击作为新源并清空目标
+                    srcInput.value = clickedId;
+                    tgtInput.value = '';
+                    alert('已重新选择源: ' + clickedName + ' (' + clickedId + ')，请再点击目标或输入目标名称');
+                });
+            }
+            graphChart.showLoading();
+            
+            try {
+                const showUpdates = document.getElementById('showUpdatesOnly').checked;
+                const n = document.getElementById('updateChapterRange').value;
+                
+                const url = showUpdates 
+                    ? `/api/novels/${novelId}/chapters/${chapterNum}/knowledge_graph?n=${n}`
+                    : `/api/novels/${novelId}/chapters/${chapterNum}/knowledge_graph`;
+
+                const res = await fetch(url);
+                const data = await res.json();
+                allGraphData = data; 
+                
+                setupGraphControls(); 
+                applyGraphFilters();
+
+            } catch (e) {
+                console.error(e);
+            } finally {
+                graphChart.hideLoading();
+            }
+        }
+
+        function setupGraphControls() {
+            if (!allGraphData) return;
+            
+            const categories = [...new Set(allGraphData.nodes.map(n => n.category))];
+            const filterContainer = document.getElementById('graphCategoryFilters');
+            
+            // Get currently checked categories to preserve state
+            const existingCheckboxes = document.querySelectorAll('.category-filter');
+            const checkedMap = new Map();
+            existingCheckboxes.forEach(cb => {
+                checkedMap.set(cb.value, cb.checked);
+            });
+            
+            // Rebuild filters
+            filterContainer.innerHTML = categories.map(c => {
+                // Default to true if new, otherwise use previous state
+                const isChecked = checkedMap.has(c) ? checkedMap.get(c) : true;
+                return `
+                    <label class="category-tag">
+                        <input type="checkbox" class="category-filter" value="${c}" ${isChecked ? 'checked' : ''} onchange="applyGraphFilters()"> 
+                        ${c}
+                    </label>
+                `;
+            }).join('');
+            
+            document.getElementById('graphSearch').onkeyup = (event) => {
+                if (event.key === 'Enter') {
+                    applyGraphFilters();
+                }
+            };
+        }
+
+        function applyGraphFilters() {
+            if (!allGraphData) return;
+
+            const searchQuery = document.getElementById('graphSearch').value.toLowerCase().trim();
+            const selectedCategories = [...document.querySelectorAll('.category-filter:checked')].map(cb => cb.value);
+            const showUpdatesOnly = document.getElementById('showUpdatesOnly').checked;
+
+            let visibleNodeIds = new Set();
+
+            if (searchQuery) {
+                // 搜索模式：查找所有匹配节点及其邻居
+                // 搜索时忽略“只看更新”的限制，以便用户能找到任何他们想找的东西
+                const matchedNodes = allGraphData.nodes.filter(n => {
+                    const nameMatch = n.name.toLowerCase().includes(searchQuery);
+                    const propMatch = n.properties && Object.values(n.properties).some(v => String(v).toLowerCase().includes(searchQuery));
+                    return nameMatch || propMatch;
+                });
+                
+                const matchedIds = new Set(matchedNodes.map(n => n.id));
+                const relatedIds = new Set();
+                
+                allGraphData.links.forEach(link => {
+                    if (matchedIds.has(link.source)) relatedIds.add(link.target);
+                    if (matchedIds.has(link.target)) relatedIds.add(link.source);
+                });
+                
+                const searchResultIds = new Set([...matchedIds, ...relatedIds]);
+                
+                // 应用类别过滤
+                searchResultIds.forEach(id => {
+                    const node = allGraphData.nodes.find(n => n.id === id);
+                    if (node && selectedCategories.includes(node.category)) {
+                        visibleNodeIds.add(id);
+                    }
+                });
+
+            } else {
+                // 非搜索模式：应用类别和更新过滤
+                allGraphData.nodes.forEach(node => {
+                    let isVisible = true;
+                    
+                    if (!selectedCategories.includes(node.category)) isVisible = false;
+                    if (showUpdatesOnly && !node.is_new) isVisible = false;
+
+                    if (isVisible) {
+                        visibleNodeIds.add(node.id);
+                    }
+                });
+                
+                // 如果是“只看更新”模式，为了让图不那么破碎，我们可以选择性地显示
+                // 那些连接了两个“新节点”的边，或者连接了“新节点”和“旧节点”的边。
+                // 当前逻辑是只显示 is_new 的节点。如果两个新节点之间有边，会显示。
+                // 如果一个新节点连接一个旧节点，旧节点不可见，边也不可见。
+                // 这符合“只看更新内容”的字面意思。
+            }
+
+            // 如果已有路径高亮，确保路径上的节点可见
+            if (highlightedPath && highlightedPath.nodes) {
+                highlightedPath.nodes.forEach(id => visibleNodeIds.add(id));
+            }
+
+            const filteredNodes = allGraphData.nodes.filter(n => visibleNodeIds.has(n.id));
+            // 显示边的逻辑：要么两端都可见，要么该边在路径上
+            const filteredLinks = allGraphData.links.filter(l => 
+                (visibleNodeIds.has(l.source) && visibleNodeIds.has(l.target)) || (highlightedPath && isLinkInPath(l))
+            );
+
+            renderGraph({ nodes: filteredNodes, links: filteredLinks });
+        }
+
+        function renderGraph(data) {
+            const categories = [...new Set(data.nodes.map(n => n.category))];
+            const colors = generateColors(categories.length);
+            const hideText = document.getElementById('hideText') ? document.getElementById('hideText').checked : false;
+            
+            const option = {
+                tooltip: {
+                    formatter: (params) => {
+                        if (params.dataType === 'node') {
+                            const node = allGraphData.nodes.find(n => n.id === params.data.id);
+                            let tooltipHtml = `<b>${node.name}</b> (${node.category})<br/>`;
+                            if(node.properties) {
+                                Object.entries(node.properties).forEach(([key, value]) => {
+                                    tooltipHtml += `${key}: ${value}<br/>`;
+                                });
+                            }
+                            return tooltipHtml;
+                        }
+                        if (params.dataType === 'edge') {
+                            const link = allGraphData.links.find(l => l.source === params.data.source && l.target === params.data.target);
+                            const sourceNode = allGraphData.nodes.find(n => n.id === link.source);
+                            const targetNode = allGraphData.nodes.find(n => n.id === link.target);
+                            if (sourceNode && targetNode) {
+                                return `${sourceNode.name} -> ${targetNode.name}<br/><b>关系: ${link.value}</b>`;
+                            }
+                        }
+                        return params.name;
+                    }
+                },
+                legend: [{ data: categories }],
+                series: [{
+                    type: 'graph',
+                    layout: 'force',
+                    data: data.nodes.map(n => ({
+                        id: n.id,
+                        name: n.name,
+                        category: n.category,
+                        symbolSize: (highlightedPath && isNodeInPath(n.id)) ? 36 : 22,
+                        label: { show: !hideText && (!highlightedPath || isNodeInPath(n.id)) },
+                        itemStyle: highlightedPath ? { opacity: isNodeInPath(n.id) ? 1 : 0.12 } : undefined
+                    })),
+                    links: data.links.map(l => ({
+                        source: l.source,
+                        target: l.target,
+                        value: l.value, // Keep relation name for tooltip
+                        label: { show: !hideText && (!highlightedPath || isLinkInPath(l)) , formatter: '{c}' },
+                        lineStyle: highlightedPath ? { opacity: isLinkInPath(l) ? 1 : 0.06 } : undefined
+                    })),
+
+                    categories: categories.map((c, i) => ({ 
+                        name: c,
+                        itemStyle: {
+                            color: colors[i]
+                        }
+                    })),
+                    roam: true,
+                    force: { repulsion: 100, edgeLength: 100 },
+                    emphasis: {
+                        focus: 'adjacency',
+                        label: {
+                            show: true
+                        }
+                    }
+                }]
+            };
+            
+            lastRenderedGraph = { nodes: data.nodes, links: data.links };
+
+            // Compute and render statistics: total counts, per-category counts and average degree
+            try {
+                const summaryEl = document.getElementById('graphSummary');
+                const catEl = document.getElementById('graphCategoryStats');
+
+                const nodes = data.nodes;
+                const links = data.links;
+
+                const nodeCount = nodes.length;
+                const linkCount = links.length;
+
+                // degree per node
+                const degreeMap = new Map();
+                nodes.forEach(n => degreeMap.set(n.id, 0));
+                links.forEach(l => {
+                    degreeMap.set(l.source, (degreeMap.get(l.source) || 0) + 1);
+                    degreeMap.set(l.target, (degreeMap.get(l.target) || 0) + 1);
+                });
+
+                // categories and stats
+                const cats = categories; // from above
+                const colorsMap = new Map();
+                cats.forEach((c, i) => colorsMap.set(c, colors[i]));
+
+                const stats = new Map();
+                nodes.forEach(n => {
+                    const c = n.category || '其他';
+                    if (!stats.has(c)) stats.set(c, {count:0, degreeSum:0});
+                    const s = stats.get(c);
+                    s.count += 1;
+                    s.degreeSum += (degreeMap.get(n.id) || 0);
+                });
+
+                summaryEl.innerHTML = `节点总数: <strong>${nodeCount}</strong> &nbsp; 关系总数: <strong>${linkCount}</strong>`;
+
+                catEl.innerHTML = '';
+                stats.forEach((v, c) => {
+                    const avg = v.count ? (v.degreeSum / v.count) : 0;
+                    const color = colorsMap.get(c) || '#888';
+                    const item = document.createElement('div');
+                    item.style.display = 'flex';
+                    item.style.alignItems = 'center';
+                    item.style.gap = '6px';
+                    item.style.fontSize = '0.9em';
+                    item.style.color = '#333';
+                    item.innerHTML = `<span style=\"width:12px;height:12px;border-radius:50%;background:${color};display:inline-block;\"></span> ${c}: <strong>${v.count}</strong> (平均度数: <strong>${avg.toFixed(1)}</strong>)`;
+                    catEl.appendChild(item);
+                });
+            } catch (e) {
+                console.warn('更新图谱统计失败', e);
+            }
+
+            graphChart.setOption(option, true); // Use true to not merge with previous options
+        }
+
+        // 查找最短路径并高亮显示（同时将其他节点/边暗淡）
+        async function findShortestPath() {
+            if (!allGraphData) return alert('请先加载图谱');
+            const srcVal = document.getElementById('pathSource').value.trim();
+            const tgtVal = document.getElementById('pathTarget').value.trim();
+            if (!srcVal || !tgtVal) return alert('请输入源和目标（名称或ID）');
+
+            // 决定是按 ID 还是按 name 查询（优先 ID 精确匹配）
+            const byId = id => allGraphData.nodes.some(n => String(n.id) === String(id));
+            let url = `/api/novels/${novelId}/chapters/${currentChapterNum}/knowledge_graph/shortest_path?n=${document.getElementById('updateChapterRange').value}`;
+            if (byId(srcVal)) {
+                url += `&source_id=${encodeURIComponent(srcVal)}`;
+            } else {
+                url += `&source_name=${encodeURIComponent(srcVal)}`;
+            }
+            if (byId(tgtVal)) {
+                url += `&target_id=${encodeURIComponent(tgtVal)}`;
+            } else {
+                url += `&target_name=${encodeURIComponent(tgtVal)}`;
+            }
+
+            showLoading('正在查找最短路径...');
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.error) return alert('查询失败: ' + data.error);
+                if (!data.path_nodes || data.path_nodes.length === 0) {
+                    highlightedPath = null;
+                    renderGraph(lastRenderedGraph || { nodes: allGraphData.nodes, links: allGraphData.links });
+                    return alert(data.message || '未找到路径');
+                }
+
+                highlightedPath = { nodes: data.path_nodes, links: data.path_links };
+                // 在当前可见子图上应用高亮
+                renderGraph(lastRenderedGraph || { nodes: allGraphData.nodes, links: allGraphData.links });
+            } catch (e) {
+                alert('请求出错: ' + e.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function clearPathHighlight() {
+            highlightedPath = null;
+            renderGraph(lastRenderedGraph || { nodes: allGraphData.nodes, links: allGraphData.links });
+        }
+
+        function isLinkInPath(link) {
+            if (!highlightedPath || !highlightedPath.links) return false;
+            return highlightedPath.links.some(pl => (pl.source === link.source && pl.target === link.target) || (pl.source === link.target && pl.target === link.source));
+        }
+
+        function isNodeInPath(nodeId) {
+            if (!highlightedPath || !highlightedPath.nodes) return false;
+            return highlightedPath.nodes.includes(nodeId);
+        }
+
+        function exportGraphImage() {
+            if (!graphChart) return alert('图谱尚未加载，无法导出');
+            try {
+                const dataURL = graphChart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#ffffff' });
+                const link = document.createElement('a');
+                link.href = dataURL;
+                link.download = `novel_${novelId}_chapter_${currentChapterNum || 'graph'}.png`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+            } catch (e) {
+                alert('导出失败: ' + e.message);
+            }
+        }
+
+        function exportGraphJSON() {
+            if (!lastRenderedGraph) return alert('图谱尚未渲染，无法导出');
+            try {
+                const dataStr = JSON.stringify(lastRenderedGraph, null, 2);
+                const blob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `novel_${novelId}_chapter_${currentChapterNum || 'graph'}.json`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                alert('导出 JSON 失败: ' + e.message);
+            }
+        }
+
+        function exportGraphCSV() {
+            if (!lastRenderedGraph) return alert('图谱尚未渲染，无法导出');
+            try {
+                let csv = 'type,id,name,category,properties\n';
+                lastRenderedGraph.nodes.forEach(n => {
+                    const props = n.properties ? JSON.stringify(n.properties).replace(/"/g, '""') : '';
+                    const id = (n.id === undefined || n.id === null) ? '' : String(n.id).replace(/"/g, '""');
+                    const name = (n.name === undefined || n.name === null) ? '' : String(n.name).replace(/"/g, '""');
+                    const category = (n.category === undefined || n.category === null) ? '' : String(n.category).replace(/"/g, '""');
+                    csv += `node,${id},${name},${category},"${props.replace(/"/g, '""')}"\n`;
+                });
+                csv += '\n';
+                csv += 'type,source,target,relation\n';
+                lastRenderedGraph.links.forEach(l => {
+                    const src = (l.source === undefined || l.source === null) ? '' : String(l.source).replace(/"/g, '""');
+                    const tgt = (l.target === undefined || l.target === null) ? '' : String(l.target).replace(/"/g, '""');
+                    const rel = (l.value === undefined || l.value === null) ? '' : String(l.value).replace(/"/g, '""');
+                    csv += `link,${src},${tgt},"${rel}"\n`;
+                });
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `novel_${novelId}_chapter_${currentChapterNum || 'graph'}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                alert('导出 CSV 失败: ' + e.message);
+            }
+        }
+
+        async function runBatchDelete() {
+            const start = document.getElementById('batchDeleteStart').value;
+            
+            if (!start) {
+                alert('请输入起始章节号');
+                return;
+            }
+            
+            if (!confirm(`确定要删除从第 ${start} 章开始的所有章节吗？此操作不可恢复！`)) {
+                return;
+            }
+            
+            showLoading(true);
+            try {
+                const res = await fetch(`/api/novels/${novelId}/chapters/batch_delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start: start })
+                });
+                
+                const data = await res.json();
+                if (res.ok) {
+                    alert(data.message);
+                    loadChapters();
+                    // Reset current view if deleted
+                    if (currentChapterNum >= start) {
+                        document.getElementById('currentChapterTitle').innerText = '请选择章节';
+                        document.getElementById('chapterContentView').innerText = '请选择左侧章节查看内容';
+                        document.getElementById('settingsView').innerHTML = '';
+                        document.getElementById('changesView').innerHTML = '';
+                        if(graphChart) graphChart.clear();
+                    }
+                } else {
+                    alert('删除失败: ' + data.error);
+                }
+            } catch (e) {
+                alert('请求出错: ' + e);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function runBatchRollback() {
+            const start = document.getElementById('batchRollbackStart').value;
+            const end = latestExtractedChapter; // 使用全局变量
+            
+            if (!start) {
+                alert('请输入起始章节号');
+                return;
+            }
+            
+            if (!confirm(`确定要回滚从第 ${start} 章到第 ${end} 章的设定吗？\n此操作将删除这些章节产生的新设定，并恢复被这些章节修改的旧设定。`)) {
+                return;
+            }
+            
+            showLoading(true);
+            try {
+                const res = await fetch(`/api/novels/${novelId}/settings/rollback`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ start: start, end: end })
+                });
+                
+                const data = await res.json();
+                if (res.ok) {
+                    alert(data.message);
+                    loadChapters();
+                    // Reset current view if affected
+                    if (currentChapterNum >= start) {
+                        viewSettings(currentChapterNum);
+                        viewChanges(currentChapterNum);
+                        if(graphChart) loadGraph(currentChapterNum);
+                    }
+                } else {
+                    alert('回滚失败: ' + data.error);
+                }
+            } catch (e) {
+                alert('请求出错: ' + e);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        loadChapters();
+        
+        // Resize chart on window resize
+        window.addEventListener('resize', () => {
+            if(graphChart) graphChart.resize();
+        });
+    </script>
+</body>
+</html>

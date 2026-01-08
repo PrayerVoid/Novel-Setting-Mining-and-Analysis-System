@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>小说设定提取系统</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 1200px; margin: 0 auto; padding: 40px 20px; background-color: #f5f7fa; }
+        
+        h1 { color: #2c3e50; text-align: center; margin-bottom: 40px; }
+        
+        .main-container { display: flex; gap: 30px; }
+        .left-panel { flex: 1; }
+        .right-panel { width: 400px; }
+        
+        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 30px; }
+        
+        .create-form { display: flex; gap: 10px; justify-content: center; align-items: center; }
+        input { padding: 10px; border: 1px solid #ddd; border-radius: 4px; width: 200px; font-size: 14px; }
+        input:focus { outline: none; border-color: #2196f3; }
+        
+        button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background 0.2s; }
+        .btn-primary { background: #2196f3; color: white; }
+        .btn-primary:hover { background: #1976d2; }
+        .btn-danger { background: #ef5350; color: white; padding: 6px 12px; font-size: 12px; }
+        .btn-danger:hover { background: #d32f2f; }
+        .btn-manage { background: #4caf50; color: white; text-decoration: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; display: inline-block; }
+        .btn-manage:hover { background: #388e3c; }
+        .btn-comparison { background: #9c27b0; color: white; }
+        .btn-comparison:hover { background: #7b1fa2; }
+
+        .novel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .novel-card { background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); padding: 20px; transition: transform 0.2s, box-shadow 0.2s; border: 1px solid #eee; display: flex; flex-direction: column; justify-content: space-between; height: 150px; }
+        .novel-card:hover { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        
+        .novel-title { font-size: 18px; font-weight: bold; color: #333; margin-bottom: 5px; }
+        .novel-author { color: #666; font-size: 14px; margin-bottom: 15px; }
+        .novel-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: auto; }
+        
+        .empty-state { text-align: center; color: #999; padding: 40px; }
+        
+        .comparison-section h3 { color: #2c3e50; margin-bottom: 20px; border-bottom: 2px solid #2196f3; padding-bottom: 10px; }
+        .comparison-feature { margin-bottom: 20px; }
+        .comparison-feature h4 { color: #333; margin-bottom: 10px; }
+        .comparison-feature p { color: #666; margin-bottom: 15px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h1>📚 小说设定提取系统</h1>
+    
+    <div class="main-container">
+        <div class="left-panel">
+            <div class="card">
+                <div class="create-form">
+                    <input type="text" id="title" placeholder="输入小说标题">
+                    <input type="text" id="author" placeholder="作者 (选填)">
+                    <button class="btn-primary" onclick="createNovel()">+ 创建新小说</button>
+                </div>
+            </div>
+
+            <div id="novelList" class="novel-grid">
+                <!-- Novels will be loaded here -->
+            </div>
+        </div>
+        
+        <div class="right-panel">
+            <div class="card">
+                <div class="comparison-section">
+                    <h3>📊 小说间比较</h3>
+                    
+                    <div class="comparison-feature">
+                        <h4>🔍 设定密度分析</h4>
+                        <p>计算各小说的设定密度：设定密度 = (实体数 + 属性数 + 关系数) / 总字数</p>
+                        <button class="btn-comparison" onclick="openComparisonPage()">进入比较页面</button>
+                    </div>
+                    
+                    <div class="comparison-feature">
+                        <h4>📈 图模式挖掘</h4>
+                        <p>从最新章设定中提取频繁出现的子图模式</p>
+                        <button class="btn-comparison" onclick="openComparisonPage()">查看图模式</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadNovels() {
+            const res = await fetch('/api/novels');
+            const novels = await res.json();
+            const list = document.getElementById('novelList');
+            
+            if (novels.length === 0) {
+                list.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;">暂无小说，请在上方创建</div>';
+                return;
+            }
+
+            list.innerHTML = novels.map(n => `
+                <div class="novel-card">
+                    <div>
+                        <div class="novel-title">${n.title}</div>
+                        <div class="novel-author">作者: ${n.author || '未知'}</div>
+                    </div>
+                    <div class="novel-actions">
+                        <a href="/novel/${n.id}" class="btn-manage">进入管理</a>
+                        <button class="btn-danger" onclick="deleteNovel(${n.id})">删除</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function createNovel() {
+            const title = document.getElementById('title').value;
+            const author = document.getElementById('author').value;
+            if(!title) return alert('请输入标题');
+            
+            await fetch('/api/novels', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({title, author})
+            });
+            document.getElementById('title').value = '';
+            document.getElementById('author').value = '';
+            loadNovels();
+        }
+
+        async function deleteNovel(id) {
+            if(!confirm('确定删除该小说及其所有设定吗？此操作不可恢复。')) return;
+            await fetch(`/api/novels/${id}`, { method: 'DELETE' });
+            loadNovels();
+        }
+
+        function openComparisonPage() {
+            window.open('/comparison', '_blank');
+        }
+
+        loadNovels();
+    </script>
+</body>
+</html>
